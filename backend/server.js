@@ -10,6 +10,7 @@
  */
 
 require('dotenv').config();
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -25,7 +26,7 @@ const app = express();
 connectDB();
 
 // Security Middlewares
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Dynamic CORS configuration supporting local dev and production deployments
 const allowedOrigins = process.env.CLIENT_URL
@@ -52,8 +53,8 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Root Health Check Route
-app.get('/', (req, res) => {
+// API Health Check Route
+app.get('/api/health', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Online Notice Board Management System API is running smoothly.',
@@ -65,12 +66,19 @@ app.use('/api/auth', authRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use('/api/admin', adminRoutes);
 
-// 404 Route Not Found Handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-  });
+// Serve Frontend Static Build in Production (Single-Site Deployment)
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+app.use(express.static(frontendDistPath));
+
+// For any client route (e.g. /login, /notices, /admin), serve React index.html
+app.get('*', (req, res) => {
+  if (req.originalUrl.startsWith('/api')) {
+    return res.status(404).json({
+      success: false,
+      message: `API route not found: ${req.method} ${req.originalUrl}`,
+    });
+  }
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
 // Global Error Handler
